@@ -17,6 +17,8 @@
 package org.graylog2.plugin;
 
 import com.github.joschi.jadconfig.Parameter;
+import com.github.joschi.jadconfig.ValidationException;
+import com.github.joschi.jadconfig.ValidatorMethod;
 import com.github.joschi.jadconfig.util.Duration;
 import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
@@ -32,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 @SuppressWarnings("FieldMayBeFinal")
@@ -389,5 +392,35 @@ public abstract class BaseConfiguration {
 
     public URI getWebEndpointUri() {
         return webEndpointUri == null ? getRestTransportUri() : webEndpointUri;
+    }
+
+    @ValidatorMethod
+    public void validateRestTlsConfig() throws ValidationException {
+        if(isRestEnableTls()) {
+            if(!isRegularFileAndReadable(getRestTlsKeyFile())) {
+                throw new ValidationException("Unreadable or missing REST API private key: " + getRestTlsKeyFile());
+            }
+
+            if(!isRegularFileAndReadable(getRestTlsCertFile())) {
+                throw new ValidationException("Unreadable or missing REST API X.509 certificate: " + getRestTlsCertFile());
+            }
+        }
+    }
+
+    @ValidatorMethod
+    public void validateWebTlsConfig() throws ValidationException {
+        if(isWebEnableTls()) {
+            if(!isRegularFileAndReadable(getWebTlsKeyFile())) {
+                throw new ValidationException("Unreadable or missing web interface private key: " + getWebTlsKeyFile());
+            }
+
+            if(!isRegularFileAndReadable(getWebTlsCertFile())) {
+                throw new ValidationException("Unreadable or missing web interface X.509 certificate: " + getWebTlsCertFile());
+            }
+        }
+    }
+
+    private boolean isRegularFileAndReadable(Path path) {
+        return path != null && Files.isRegularFile(path) && Files.isReadable(path);
     }
 }
