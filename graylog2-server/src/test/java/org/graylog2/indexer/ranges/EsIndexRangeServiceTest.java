@@ -17,12 +17,12 @@
 package org.graylog2.indexer.ranges;
 
 import com.codahale.metrics.MetricRegistry;
-import com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule;
-import com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
+import com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule;
+import com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.Settings;
 import org.graylog2.configuration.ElasticsearchConfiguration;
@@ -47,8 +47,8 @@ import javax.inject.Inject;
 import java.util.Set;
 import java.util.SortedSet;
 
-import static com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
-import static com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
+import static com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
+import static com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -84,7 +84,8 @@ public class EsIndexRangeServiceTest {
     public void setUp() throws Exception {
         final Messages messages = new Messages(client, ELASTICSEARCH_CONFIGURATION, new MetricRegistry());
         indices = new Indices(client, ELASTICSEARCH_CONFIGURATION, new IndexMapping(), messages);
-        final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION.getIndexPrefix(), new NullActivityWriter(), null, null, indices);
+        final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION.getIndexPrefix(), new NullActivityWriter(),
+            indices, null, null);
         indexRangeService = new EsIndexRangeService(client, deflector, localEventBus, new MetricRegistry());
     }
 

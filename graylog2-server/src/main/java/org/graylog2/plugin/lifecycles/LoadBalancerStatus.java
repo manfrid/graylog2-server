@@ -22,6 +22,7 @@ package org.graylog2.plugin.lifecycles;
 public enum LoadBalancerStatus {
 
     DEAD,
-    ALIVE
+    ALIVE,
+    THROTTLED
 
 }

@@ -20,10 +20,16 @@ import com.codahale.metrics.MetricRegistry;
 import com.github.joschi.jadconfig.util.Size;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
+import com.google.common.eventbus.EventBus;
+import com.google.common.io.Files;
 import com.google.common.primitives.Ints;
+import kafka.common.KafkaException;
 import kafka.log.LogSegment;
 import kafka.utils.FileLock;
+import org.graylog2.Configuration;
 import org.graylog2.plugin.InstantMillisProvider;
+import org.graylog2.plugin.ServerStatus;
+import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.joda.time.DateTimeZone;
@@ -34,11 +40,16 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -47,15 +58,20 @@ import static org.apache.commons.io.filefilter.FileFilterUtils.directoryFileFilt
 import static org.apache.commons.io.filefilter.FileFilterUtils.fileFileFilter;
 import static org.apache.commons.io.filefilter.FileFilterUtils.nameFileFilter;
 import static org.apache.commons.io.filefilter.FileFilterUtils.suffixFileFilter;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 public class KafkaJournalTest {
     @Rule
-    public TemporaryFolder temporaryFolder = new TemporaryFolder();
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+    @Rule
+    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
+    private ServerStatus serverStatus;
     private ScheduledThreadPoolExecutor scheduler;
     private File journalDirectory;
 
@@ -64,6 +80,17 @@ public class KafkaJournalTest {
         scheduler = new ScheduledThreadPoolExecutor(1);
         scheduler.prestartCoreThread();
         journalDirectory = temporaryFolder.newFolder();
+
+        final File nodeId = temporaryFolder.newFile("node-id");
+        Files.write(UUID.randomUUID().toString(), nodeId, StandardCharsets.UTF_8);
+
+        final Configuration configuration = new Configuration() {
+            @Override
+            public String getNodeIdFile() {
+                return nodeId.getAbsolutePath();
+            }
+        };
+        serverStatus = new ServerStatus(configuration, EnumSet.of(ServerStatus.Capability.MASTER), new EventBus("KafkaJournalTest"));
     }
 
     @After
@@ -81,7 +108,9 @@ public class KafkaJournalTest {
                 Duration.standardHours(1),
                 1_000_000,
                 Duration.standardMinutes(1),
-                new MetricRegistry());
+                100,
+                new MetricRegistry(),
+                serverStatus);
 
         final byte[] idBytes = "id".getBytes(UTF_8);
         final byte[] messageBytes = "message".getBytes(UTF_8);
@@ -91,7 +120,7 @@ public class KafkaJournalTest {
 
         final Journal.JournalReadEntry firstMessage = Iterators.getOnlyElement(messages.iterator());
 
-        assertEquals(new String(firstMessage.getPayload(), UTF_8), "message");
+        assertEquals("message", new String(firstMessage.getPayload(), UTF_8));
     }
 
     @Test
@@ -104,7 +133,9 @@ public class KafkaJournalTest {
                 Duration.standardHours(1),
                 1_000_000,
                 Duration.standardMinutes(1),
-                new MetricRegistry());
+                100,
+                new MetricRegistry(),
+                serverStatus);
 
         final byte[] idBytes = "id".getBytes(UTF_8);
         final byte[] messageBytes = "message1".getBytes(UTF_8);
@@ -116,7 +147,7 @@ public class KafkaJournalTest {
 
         final Journal.JournalReadEntry firstMessage = Iterators.getOnlyElement(messages.iterator());
 
-        assertEquals(new String(firstMessage.getPayload(), UTF_8), "message1");
+        assertEquals("message1", new String(firstMessage.getPayload(), UTF_8));
     }
 
     private int createBulkChunks(KafkaJournal journal, Size segmentSize, int bulkCount) {
@@ -158,7 +189,9 @@ public class KafkaJournalTest {
                 Duration.standardDays(1),
                 1_000_000,
                 Duration.standardMinutes(1),
-                new MetricRegistry());
+                100,
+                new MetricRegistry(),
+                serverStatus);
 
         createBulkChunks(journal, segmentSize, 3);
 
@@ -185,7 +218,9 @@ public class KafkaJournalTest {
                 Duration.standardDays(1),
                 1_000_000,
                 Duration.standardMinutes(1),
-                new MetricRegistry());
+                100,
+                new MetricRegistry(),
+                serverStatus);
         final File messageJournalDir = new File(journalDirectory, "messagejournal-0");
         assertTrue(messageJournalDir.exists());
 
@@ -219,7 +254,9 @@ public class KafkaJournalTest {
                     Duration.standardMinutes(1),
                     1_000_000,
                     Duration.standardMinutes(1),
-                    new MetricRegistry());
+                    100,
+                    new MetricRegistry(),
+                    serverStatus);
             final File messageJournalDir = new File(journalDirectory, "messagejournal-0");
             assertTrue(messageJournalDir.exists());
 
@@ -271,7 +308,9 @@ public class KafkaJournalTest {
                 Duration.standardDays(1),
                 1_000_000,
                 Duration.standardMinutes(1),
-                new MetricRegistry());
+                100,
+                new MetricRegistry(),
+                serverStatus);
         final File messageJournalDir = new File(journalDirectory, "messagejournal-0");
         assertTrue(messageJournalDir.exists());
 
@@ -303,7 +342,7 @@ public class KafkaJournalTest {
         assertEquals(countSegmentsInDir(messageJournalDir), 1);
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void lockedJournalDir() throws Exception {
         // Grab the lock before starting the KafkaJournal.
         final File file = new File(journalDirectory, ".lock");
@@ -311,7 +350,8 @@ public class KafkaJournalTest {
         final FileLock fileLock = new FileLock(file);
         assumeTrue(fileLock.tryLock());
 
-        new KafkaJournal(journalDirectory,
+        try {
+            new KafkaJournal(journalDirectory,
                 scheduler,
                 Size.megabytes(100L),
                 Duration.standardHours(1),
@@ -319,6 +359,61 @@ public class KafkaJournalTest {
                 Duration.standardHours(1),
                 1_000_000,
                 Duration.standardMinutes(1),
-                new MetricRegistry());
+                100,
+                new MetricRegistry(),
+                serverStatus);
+            fail("Expected exception");
+        } catch (Exception e) {
+            assertThat(e)
+                .isExactlyInstanceOf(RuntimeException.class)
+                .hasMessageStartingWith("kafka.common.KafkaException: Failed to acquire lock on file .lock in")
+                .hasCauseExactlyInstanceOf(KafkaException.class);
+        }
+    }
+
+
+    @Test
+    public void serverStatusThrottledIfJournalUtilizationIsHigherThanThreshold() throws Exception {
+        serverStatus.running();
+
+        final Size segmentSize = Size.kilobytes(1L);
+        final KafkaJournal journal = new KafkaJournal(journalDirectory,
+            scheduler,
+            segmentSize,
+            Duration.standardSeconds(1L),
+            Size.kilobytes(4L),
+            Duration.standardSeconds(1L),
+            1_000_000,
+            Duration.standardSeconds(1L),
+            90,
+            new MetricRegistry(),
+            serverStatus);
+
+        createBulkChunks(journal, segmentSize, 4);
+        journal.flushDirtyLogs();
+        journal.cleanupLogs();
+        assertThat(serverStatus.getLifecycle()).isEqualTo(Lifecycle.THROTTLED);
+    }
+
+    @Test
+    public void serverStatusUnthrottledIfJournalUtilizationIsLowerThanThreshold() throws Exception {
+        serverStatus.throttle();
+
+        final Size segmentSize = Size.kilobytes(1L);
+        final KafkaJournal journal = new KafkaJournal(journalDirectory,
+            scheduler,
+            segmentSize,
+            Duration.standardSeconds(1L),
+            Size.kilobytes(4L),
+            Duration.standardSeconds(1L),
+            1_000_000,
+            Duration.standardSeconds(1L),
+            90,
+            new MetricRegistry(),
+            serverStatus);
+
+        journal.flushDirtyLogs();
+        journal.cleanupLogs();
+        assertThat(serverStatus.getLifecycle()).isEqualTo(Lifecycle.RUNNING);
     }
 }

@@ -244,6 +244,10 @@
             <groupId>org.elasticsearch</groupId>
             <artifactId>elasticsearch</artifactId>
         </dependency>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.kie</groupId>
@@ -323,7 +327,7 @@
             <artifactId>assertj-joda-time</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.github.joschi.nosqlunit</groupId>
+            <groupId>com.lordofthejars</groupId>
             <artifactId>nosqlunit-elasticsearch2</artifactId>
         </dependency>
         <dependency>
@@ -423,6 +427,16 @@
             <artifactId>system-rules</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15on</artifactId>
+            <version>1.52</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk15on</artifactId>
+            <version>1.52</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -478,6 +492,16 @@
                             <artifact>commons-collections:commons-collections</artifact>
                             <excludes>
                                 <exclude>org/apache/commons/collections/functors/InvokerTransformer.class</exclude>
+                            </excludes>
+                        </filter>
+                        <!-- Bouncycastle's JARs are signed. When building a shaded JAR, either remove the signatures, or
+                        add dependency to the main JAR's manifest. Otherwise running the application will fail. -->
+                        <filter>
+                            <artifact>org.bouncycastle:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
                             </excludes>
                         </filter>
                     </filters>
