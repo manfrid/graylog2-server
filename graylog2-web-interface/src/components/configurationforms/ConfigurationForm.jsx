@@ -18,6 +18,10 @@ const ConfigurationForm = React.createClass({
   componentWillReceiveProps(props) {
     this.setState(this._copyStateFromProps(props));
   },
+  shouldComponentUpdate(nextProps, nextState) {
+    return false;
+  },
+
   getValue() {
     const data = {};
     const values = this.state.values;
