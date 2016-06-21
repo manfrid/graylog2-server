@@ -1,5 +1,10 @@
 import React, {PropTypes} from 'react';
+
+import ActionsProvider from 'injection/ActionsProvider';
+const MessagesActions = ActionsProvider.getActions('Messages');
+
 import StoreProvider from 'injection/StoreProvider';
+// eslint-disable-next-line no-unused-vars
 const MessagesStore = StoreProvider.getStore('Messages');
 
 const MessageLoader = React.createClass({
@@ -33,7 +38,7 @@ const MessageLoader = React.createClass({
     if (messageId === '' || index === '') {
       return;
     }
-    const promise = MessagesStore.loadMessage(index, messageId);
+    const promise = MessagesActions.loadMessage.triggerPromise(index, messageId);
     promise.then(data => this.props.onMessageLoaded(data));
 
     event.preventDefault();
